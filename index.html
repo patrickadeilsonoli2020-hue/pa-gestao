@@ -1,131 +1,252 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PA Gestão</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PA Gestão | Business Intelligence</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #0f172a; --success: #10b981; --danger: #ef4444; --bg: #f8fafc; --white: #ffffff; }
+        * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        aside { 
+            width: 280px; background: var(--primary); color: white; position: fixed; 
+            height: 100%; left: -280px; z-index: 1000; transition: 0.3s; padding: 25px; 
+        }
+        aside.aberto { left: 0; }
+        .brand { border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 30px; text-align: center; padding-bottom: 20px; }
+        .brand span { display: block; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+        
+        nav button { 
+            width: 100%; padding: 14px; background: transparent; border: none; 
+            color: #94a3b8; text-align: left; cursor: pointer; font-weight: 600; 
+        }
+        nav button.active { background: var(--success); color: white; border-radius: 8px; }
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+        main { flex: 1; display: flex; flex-direction: column; width: 100%; overflow-y: auto; }
+        .top-bar { background: var(--white); padding: 15px 25px; display: flex; justify-content: space-between; border-bottom: 1px solid #e2e8f0; }
+        .content-wrapper { padding: 25px; }
+        .page { display: none; }
+        .page.active { display: block; }
 
-<style>
-body{margin:0;font-family:Arial;background:#f5f7fb;}
-.sidebar{width:220px;position:fixed;height:100vh;background:#111;color:#fff;padding:15px}
-.sidebar h2{text-align:center}
-.nav-btn{width:100%;padding:10px;margin:5px 0;border:none;background:#222;color:#fff;cursor:pointer;border-radius:6px}
-.nav-btn.active{background:#007bff}
-.content{margin-left:240px;padding:20px}
-.page{display:none}
-.page.active{display:block}
-.card{background:#fff;padding:15px;border-radius:10px;margin-bottom:10px;box-shadow:0 0 5px #ccc}
-input,select,button{padding:10px;border-radius:6px;border:1px solid #ccc;width:100%;margin:5px 0}
-button{cursor:pointer;background:#007bff;color:#fff;border:none}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-</style>
+        .stat-card { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .text-receita { color: var(--success) !important; font-weight: bold; }
+        .text-despesa { color: var(--danger) !important; font-weight: bold; }
+        
+        .card { background: var(--white); border-radius: 16px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        /* Itens do Histórico */
+        .hist-item { display: grid; grid-template-columns: 60px 1fr 100px 120px; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9; }
+        .hist-icon { width: 35px; height: 35px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .icon-up { background: #dcfce7; color: var(--success); }
+        .icon-down { background: #fee2e2; color: var(--danger); }
+        .hist-name { font-weight: 600; color: var(--primary); font-size: 0.9rem; }
+        .hist-date { font-size: 0.75rem; color: #64748b; }
+        .hist-method { font-size: 0.7rem; color: #94a3b8; background: #f1f5f9; padding: 2px 8px; border-radius: 20px; }
+
+        .dre-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+        .dre-total { font-weight: 700; border-top: 2px solid var(--primary); margin-top: 10px; font-size: 1.2rem; padding-top: 15px; }
+
+        input, select { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; font-size: 0.9rem; }
+        .btn-save { background: var(--success); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+        
+        #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999; }
+        #overlay.ativo { display: block; }
+
+        @media print {
+            aside, .top-bar, .btn-save, #overlay { display: none !important; }
+            main { overflow: visible !important; width: 100% !important; }
+            .page { display: block !important; }
+            .card { break-inside: avoid; border: 1px solid #eee; }
+        }
+    </style>
 </head>
-
 <body>
 
-<div class="sidebar">
-<h2>PA Gestão</h2>
-<button onclick="navegar('p-dash',this)" class="nav-btn active">📊 Visão Geral</button>
-<button onclick="navegar('p-caixa',this)" class="nav-btn">🛒 Caixa</button>
-<button onclick="navegar('p-hist',this)" class="nav-btn">📄 Histórico</button>
-</div>
+<div id="overlay" onclick="toggleSidebar()"></div>
 
-<div class="content">
+<aside id="sidebar">
+    <div class="brand">
+        <h2 style="margin:0">PA GESTÃO</h2>
+        <span>Business Intelligence</span>
+    </div>
+    <nav>
+        <button onclick="navegar('p-dash', this)" class="nav-btn active">Visão Geral</button>
+        <button onclick="navegar('p-caixa', this)" class="nav-btn">Registrar Venda</button>
+        <button onclick="navegar('p-dre', this)" class="nav-btn">Relatório DRE</button>
+        <button onclick="navegar('p-hist', this)" class="nav-btn">Histórico Total</button>
+    </nav>
+</aside>
 
-<div id="p-dash" class="page active">
-<h2>Visão Geral</h2>
-<div class="stats">
-<div class="card">💰 Faturamento<br><strong id="st-fat">0</strong></div>
-<div class="card">📉 Despesas<br><strong id="st-gas">0</strong></div>
-<div class="card">📈 Lucro<br><strong id="st-luc">0</strong></div>
-</div>
-</div>
+<main>
+    <div class="top-bar">
+        <button onclick="toggleSidebar()" style="background:var(--primary); color:white; border:none; padding:10px 15px; border-radius:6px; cursor:pointer">Menu</button>
+        <div style="display:flex; gap:10px">
+            <input type="month" id="filtroGlobal" onchange="atualizarTudo()" style="width:150px">
+            <button onclick="window.print()" class="btn-save" style="background:var(--primary)">Exportar PDF</button>
+        </div>
+    </div>
 
-<div id="p-caixa" class="page">
-<h2>Movimentação</h2>
+    <div class="content-wrapper">
+        <div id="p-dash" class="page active">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom:30px">
+                <div class="stat-card"><small>Receita Bruta</small><h2 id="st-fat" class="text-receita">R$ 0,00</h2></div>
+                <div class="stat-card"><small>Despesas Totais</small><h2 id="st-gas" class="text-despesa">R$ 0,00</h2></div>
+                <div class="stat-card"><small>Saldo Líquido</small><h2 id="st-luc">R$ 0,00</h2></div>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+                <div class="card"><h4>Evolução de Vendas</h4><div style="height:250px"><canvas id="chartGeral"></canvas></div></div>
+                <div class="card"><h4>Meios de Pagamento</h4><div style="height:250px"><canvas id="chartPagamentos"></canvas></div></div>
+            </div>
+        </div>
 
-<div class="card">
-<select id="c-tipo">
-<option value="receita">Receita</option>
-<option value="despesa">Despesa</option>
-</select>
+        <div id="p-caixa" class="page">
+            <div class="card">
+                <h4>Registrar Movimentação</h4>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; align-items:end">
+                    <div><label><small>Descrição</small></label><input id="c-desc" placeholder="Ex: Produto X"></div>
+                    <div><label><small>Valor</small></label><input id="c-valor" type="number" placeholder="0,00"></div>
+                    <div><label><small>Pagamento</small></label>
+                        <select id="c-pag">
+                            <option value="Pix">Pix</option>
+                            <option value="C. Crédito">Cartão Crédito</option>
+                            <option value="C. Débito">Cartão Débito</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                        </select>
+                    </div>
+                    <div><label><small>Tipo</small></label>
+                        <select id="c-tipo">
+                            <option value="receita">Receita (Entrada)</option>
+                            <option value="variável">Despesa (Saída)</option>
+                        </select>
+                    </div>
+                    <button onclick="salvarCaixa()" class="btn-save">GRAVAR</button>
+                </div>
+            </div>
+            <div class="card">
+                <h4>Vendas e Saídas de Hoje</h4>
+                <div id="listaHoje"></div>
+            </div>
+        </div>
 
-<input id="c-desc" placeholder="Descrição">
-<input id="c-valor" type="number" placeholder="Valor">
-<select id="c-pag">
-<option value="pix">PIX</option>
-<option value="dinheiro">Dinheiro</option>
-<option value="cartao">Cartão</option>
-</select>
+        <div id="p-dre" class="page">
+            <div class="card" style="max-width: 600px; margin: auto;">
+                <h3 style="text-align:center; margin-bottom:20px">PA Gestão Empresarial - DRE</h3>
+                <div id="dre-content"></div>
+            </div>
+        </div>
 
-<button onclick="salvarCaixa()">Salvar</button>
-</div>
-</div>
+        <div id="p-hist" class="page">
+            <div class="card">
+                <h4>Histórico Geral do Mês</h4>
+                <div id="listaHist"></div>
+            </div>
+        </div>
+    </div>
+</main>
 
-<div id="p-hist" class="page">
-<h2>Histórico</h2>
-<div id="lista"></div>
-</div>
-
-</div>
-
-<script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 const SB_URL = "https://zkrlehcbjblabqscgmea.supabase.co";
 const SB_KEY = "sb_publishable_DTWDFzigCpkmQKRdsrbJQA_G1EBMdAh";
-const supabase = supabasejs.createClient(SB_URL, SB_KEY);
+const supabase = createClient(SB_URL, SB_KEY);
 
-console.log("Supabase conectado");
+const BRL = (v) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+let charts = {};
 
-function navegar(id,el){
- document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
- document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
- document.getElementById(id).classList.add('active');
- el.classList.add('active');
+window.toggleSidebar = () => {
+    document.getElementById('sidebar').classList.toggle('aberto');
+    document.getElementById('overlay').classList.toggle('ativo');
+};
+
+window.navegar = (id, btn) => {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+    if(document.getElementById('sidebar').classList.contains('aberto')) toggleSidebar();
+    atualizarTudo();
+};
+
+window.salvarCaixa = async () => {
+    const n = document.getElementById('c-desc').value, v = parseFloat(document.getElementById('c-valor').value);
+    const t = document.getElementById('c-tipo').value, p = document.getElementById('c-pag').value;
+    if(!n || isNaN(v)) return;
+    if(t === 'receita') await supabase.from('receitas').insert([{ nome:n, valor:v, pagamento: p }]);
+    else await supabase.from('despesas').insert([{ nome:n, valor:v, categoria: 'variável', pagamento: p }]);
+    document.getElementById('c-desc').value = ''; document.getElementById('c-valor').value = '';
+    atualizarTudo();
+};
+
+function gerarHtmlItem(i) {
+    return `
+        <div class="hist-item">
+            <div class="hist-icon ${i.t=='REC'?'icon-up':'icon-down'}">${i.t=='REC'?'↑':'↓'}</div>
+            <div>
+                <div class="hist-name">${i.nome}</div>
+                <div class="hist-date">${new Date(i.created_at).toLocaleDateString()}</div>
+            </div>
+            <div><span class="hist-method">${i.pagamento || 'Pix'}</span></div>
+            <div style="text-align:right" class="${i.t=='REC'?'text-receita':'text-despesa'}">${BRL(i.valor)}</div>
+        </div>`;
 }
 
-async function salvarCaixa(){
- const nome=document.getElementById('c-desc').value;
- const valor=parseFloat(document.getElementById('c-valor').value);
- const tipo=document.getElementById('c-tipo').value;
- const pag=document.getElementById('c-pag').value;
+async function atualizarTudo() {
+    const mes = document.getElementById('filtroGlobal').value || new Date().toISOString().substring(0, 7);
+    const { data: rec } = await supabase.from('receitas').select('*');
+    const { data: des } = await supabase.from('despesas').select('*');
+    
+    const rMes = rec?.filter(i => i.created_at.startsWith(mes)) || [];
+    const dMes = des?.filter(i => i.created_at.startsWith(mes)) || [];
+    const fat = rMes.reduce((a,c) => a + c.valor, 0);
+    const gas = dMes.reduce((a,c) => a + c.valor, 0);
+    const qtd = rMes.length;
 
- if(!nome || !valor){ alert("Preencha os campos"); return; }
+    document.getElementById('st-fat').innerText = BRL(fat);
+    document.getElementById('st-gas').innerText = BRL(gas);
+    document.getElementById('st-luc').innerText = BRL(fat - gas);
+    document.getElementById('st-luc').className = (fat-gas) >= 0 ? 'text-receita' : 'text-despesa';
 
- if(tipo==='receita'){
-   await supabase.from('receitas').insert([{nome,valor,pagamento:pag}]);
- } else {
-   await supabase.from('despesas').insert([{nome,valor}]);
- }
+    // DRE COMPLETO RESTAURADO (Ticket Médio + Margem)
+    document.getElementById('dre-content').innerHTML = `
+        <div class="dre-row"><span>RECEITA BRUTA (+)</span><b class="text-receita">${BRL(fat)}</b></div>
+        <div class="dre-row"><span>QUANTIDADE DE VENDAS</span><b>${qtd}</b></div>
+        <div class="dre-row"><span>TICKET MÉDIO</span><b>${BRL(qtd > 0 ? fat/qtd : 0)}</b></div>
+        <div class="dre-row"><span>GASTOS OPERACIONAIS (-)</span><b class="text-despesa">${BRL(gas)}</b></div>
+        <div class="dre-row dre-total"><span>RESULTADO LÍQUIDO</span><span class="${fat-gas>=0?'text-receita':'text-despesa'}">${BRL(fat-gas)}</span></div>
+        <div style="text-align:center; margin-top:15px; font-size:0.8rem; color:#64748b">Margem Líquida: ${fat > 0 ? ((fat-gas)/fat*100).toFixed(1) : 0}%</div>
+    `;
 
- document.getElementById('c-desc').value='';
- document.getElementById('c-valor').value='';
+    const hoje = new Date().toISOString().split('T')[0];
+    const total = [...rMes.map(i=>({...i, t:'REC'})), ...dMes.map(i=>({...i, t:'DES'}))].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
- atualizarTudo();
+    document.getElementById('listaHist').innerHTML = total.map(i => gerarHtmlItem(i)).join('') || 'Vazio';
+    document.getElementById('listaHoje').innerHTML = total.filter(i => i.created_at.startsWith(hoje)).map(i => gerarHtmlItem(i)).join('') || '<div style="padding:15px; color:#94a3b8; font-size:0.8rem">Nenhuma movimentação hoje.</div>';
+
+    renderCharts(rMes);
 }
 
-async function atualizarTudo(){
- const {data:r}=await supabase.from('receitas').select('*');
- const {data:d}=await supabase.from('despesas').select('*');
-
- let fat=r.reduce((a,c)=>a+c.valor,0);
- let gas=d.reduce((a,c)=>a+c.valor,0);
-
- document.getElementById('st-fat').innerText=fat.toFixed(2);
- document.getElementById('st-gas').innerText=gas.toFixed(2);
- document.getElementById('st-luc').innerText=(fat-gas).toFixed(2);
-
- let html='';
- [...r,...d].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).forEach(i=>{
-  html+=`<div class="card">${i.nome} - R$ ${i.valor}</div>`;
- });
-
- document.getElementById('lista').innerHTML=html;
+function renderCharts(rMes) {
+    if(charts.main) charts.main.destroy();
+    if(charts.pag) charts.pag.destroy();
+    const dias = Array.from({length: 31}, (_, i) => i + 1);
+    charts.main = new Chart(document.getElementById('chartGeral'), {
+        type: 'line',
+        data: { labels: dias, datasets: [{ label: 'Vendas R$', data: dias.map(d => rMes.filter(v => new Date(v.created_at).getDate() === d).reduce((a,c)=>a+c.valor, 0)), borderColor: '#10b981', tension: 0.3 }] },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+    const p = { Pix: rMes.filter(v=>v.pagamento==='Pix').length, Cartao: rMes.filter(v=>v.pagamento && (v.pagamento.includes('Cartão') || v.pagamento.includes('C.'))).length, Dinheiro: rMes.filter(v=>v.pagamento==='Dinheiro').length };
+    charts.pag = new Chart(document.getElementById('chartPagamentos'), {
+        type: 'doughnut',
+        data: { labels: ['Pix', 'Cartão', 'Dinheiro'], datasets: [{ data: [p.Pix, p.Cartao, p.Dinheiro], backgroundColor: ['#10b981', '#3b82f6', '#f59e0b'] }] },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
 }
 
+document.getElementById('filtroGlobal').value = new Date().toISOString().substring(0, 7);
 atualizarTudo();
 </script>
-
 </body>
 </html>
